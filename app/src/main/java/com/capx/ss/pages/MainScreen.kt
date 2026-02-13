@@ -4,6 +4,7 @@ package com.capx.ss.pages
 import android.Manifest
 import android.os.Build
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -19,9 +20,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Camera
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -55,11 +58,13 @@ import java.util.Locale
 fun MainScreen(
     viewModel: MainViewModel = hiltViewModel(),
     onRequestPermission: () -> Unit,
+    onRequestOverlayPermission: () -> Unit,
     onStopService: () -> Unit
 ) {
     val context = LocalContext.current
     val isServiceRunning by viewModel.isServiceRunning.collectAsStateWithLifecycle()
     val screenshots by viewModel.screenshots.collectAsStateWithLifecycle(initialValue = emptyList())
+    val hasOverlayPermission by viewModel.hasOverlayPermission.collectAsStateWithLifecycle()
     val postNotificationPermissionState =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             rememberPermissionState(Manifest.permission.POST_NOTIFICATIONS)
@@ -115,7 +120,48 @@ fun MainScreen(
         }
 
         Spacer(modifier = Modifier.height(16.dp))
-
+        if (!hasOverlayPermission) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer
+                )
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                        Text(
+                            text = "Overlay permission required for floating button",
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            fontSize = 14.sp
+                        )
+                    }
+                    Button(
+                        onClick = onRequestOverlayPermission,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error
+                        ),
+                        modifier = Modifier.height(32.dp)
+                    ) {
+                        Text("Grant", fontSize = 12.sp)
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+        }
         // Action Buttons
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -180,7 +226,35 @@ fun MainScreen(
                 }
             }
         }
-
+        // Info card about floating button
+        if (isServiceRunning && hasOverlayPermission) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer
+                )
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.secondary
+                    )
+                    Text(
+                        text = "Floating capture button is active. Tap it anytime to take a screenshot.",
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+        }
         Spacer(modifier = Modifier.height(16.dp))
 
         // Screenshots list
@@ -192,23 +266,59 @@ fun MainScreen(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(screenshots) { screenshot ->
-                ScreenshotItem(screenshot)
+        if (screenshots.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(32.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Image,
+                        contentDescription = null,
+                        modifier = Modifier.size(48.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "No screenshots yet",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 16.sp
+                    )
+                }
+            }
+        } else {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(screenshots) { screenshot ->
+                    ScreenshotItem(screenshot)
+                }
             }
         }
     }
 }
 
+
 @Composable
 fun ScreenshotItem(screenshot: Screenshot) {
     val dateFormat = remember { SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault()) }
+    val context = LocalContext.current
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        onClick = {
+            // Open the screenshot
+            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                setDataAndType(screenshot.uri, "image/png")
+                addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            context.startActivity(intent)
+        }
     ) {
         Row(
             modifier = Modifier
@@ -241,10 +351,23 @@ fun ScreenshotItem(screenshot: Screenshot) {
                 }
             }
 
-            IconButton(onClick = { /* TODO: Open screenshot */ }) {
+            IconButton(onClick = {
+                // Share the screenshot
+                val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                    type = "image/png"
+                    putExtra(android.content.Intent.EXTRA_STREAM, screenshot.uri)
+                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                context.startActivity(
+                    android.content.Intent.createChooser(
+                        shareIntent,
+                        "Share Screenshot"
+                    )
+                )
+            }) {
                 Icon(
-                    imageVector = Icons.Default.Visibility,
-                    contentDescription = "View"
+                    imageVector = Icons.Default.Share,
+                    contentDescription = "Share"
                 )
             }
         }

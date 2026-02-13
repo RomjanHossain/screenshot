@@ -5,13 +5,18 @@ import android.content.Intent
 import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme.colorScheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.net.toUri
 import com.capx.ss.pages.MainScreen
 import com.capx.ss.services.ScreenshotService
 import com.capx.ss.ui.theme.SsTheme
@@ -28,9 +33,19 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
         if (result.resultCode == RESULT_OK && result.data != null) {
-            startScreenshotService(result.resultCode, result.data!!)
+            if (checkOverlayPermission()) {
+                startScreenshotService(result.resultCode, result.data!!)
+            } else {
+                Toast.makeText(
+                    this,
+                    "Please grant overlay permission for floating button",
+                    Toast.LENGTH_LONG
+                ).show()
+                requestOverlayPermission()
+            }
         }
     }
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -41,9 +56,22 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = colorScheme.background
                 ) {
+                    val context = LocalContext.current
+
+                    LaunchedEffect(Unit) {
+                        if (!checkOverlayPermission()) {
+                            Toast.makeText(
+                                context,
+                                "Please grant overlay permission for floating button",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    }
+
                     MainScreen(
                         onRequestPermission = { requestScreenCapture() },
-                        onStopService = { stopScreenshotService() }
+                        onStopService = { stopScreenshotService() },
+                        onRequestOverlayPermission = { requestOverlayPermission() }
                     )
                 }
             }
@@ -74,5 +102,37 @@ class MainActivity : ComponentActivity() {
             action = ScreenshotService.ACTION_STOP_SERVICE
         }
         startService(serviceIntent)
+    }
+
+    private fun checkOverlayPermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            Settings.canDrawOverlays(this)
+        } else {
+            true // Below API 23, overlay permission is granted at install time
+        }
+    }
+
+    private fun requestOverlayPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val intent = Intent(
+                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                "package:$packageName".toUri()
+            )
+            overlayPermissionLauncher.launch(intent)
+        }
+    }
+
+    private val overlayPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        if (checkOverlayPermission()) {
+            Toast.makeText(this, "Overlay permission granted", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(
+                this,
+                "Overlay permission denied. Floating button won't appear",
+                Toast.LENGTH_LONG
+            ).show()
+        }
     }
 }

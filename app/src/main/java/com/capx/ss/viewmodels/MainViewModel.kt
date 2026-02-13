@@ -3,6 +3,8 @@ package com.capx.ss.viewmodels
 
 import android.content.Context
 import android.content.Intent
+import android.os.Build
+import android.provider.Settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.capx.ss.data.repository.ScreenshotRepository
@@ -29,6 +31,10 @@ class MainViewModel @Inject constructor(
     private val _screenshots = MutableStateFlow<List<Screenshot>>(emptyList())
     val screenshots: StateFlow<List<Screenshot>> = _screenshots.asStateFlow()
 
+    private val _hasOverlayPermission = MutableStateFlow(false)
+    val hasOverlayPermission: StateFlow<Boolean> = _hasOverlayPermission.asStateFlow()
+
+
     init {
         viewModelScope.launch {
             screenshotRepository.screenshots.collect { screenshot ->
@@ -43,6 +49,7 @@ class MainViewModel @Inject constructor(
 
         // Check service status periodically
         checkServiceStatus()
+        checkOverlayPermission()
     }
 
     fun captureScreenshot() {
@@ -51,6 +58,14 @@ class MainViewModel @Inject constructor(
                 action = ScreenshotService.ACTION_CAPTURE_SCREENSHOT
             }
             context.startService(intent)
+        }
+    }
+
+    fun checkOverlayPermission() {
+        _hasOverlayPermission.value = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            Settings.canDrawOverlays(context)
+        } else {
+            true
         }
     }
 
