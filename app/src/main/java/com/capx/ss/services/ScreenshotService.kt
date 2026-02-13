@@ -16,7 +16,8 @@ import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -28,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.unit.dp
@@ -48,6 +50,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -146,8 +149,20 @@ class ScreenshotService : LifecycleService(), SavedStateRegistryOwner, ViewModel
 
     private fun captureScreenshot() {
         serviceScope.launch {
-            val screenshot = screenshotRepository.captureScreenshot()
+            // Hide FAB before capture
             withContext(Dispatchers.Main) {
+                floatingButtonView?.visibility = View.GONE
+            }
+            
+            // Give a tiny delay for the view to disappear from the buffer
+            delay(50)
+
+            val screenshot = screenshotRepository.captureScreenshot()
+            
+            withContext(Dispatchers.Main) {
+                // Show FAB again
+                floatingButtonView?.visibility = View.VISIBLE
+                
                 if (screenshot != null) {
                     Toast.makeText(
                         this@ScreenshotService,
@@ -203,6 +218,18 @@ class ScreenshotService : LifecycleService(), SavedStateRegistryOwner, ViewModel
                         FloatingCaptureButton(
                             onClick = {
                                 captureScreenshot()
+                            },
+                            onDrag = { dx, dy ->
+                                // Update layout params based on drag
+                                // Since gravity is BOTTOM | END, increasing x moves it left, 
+                                // and increasing y moves it up.
+                                layoutParams.x -= dx.toInt()
+                                layoutParams.y -= dy.toInt()
+                                try {
+                                    windowManager?.updateViewLayout(frameLayout, layoutParams)
+                                } catch (e: Exception) {
+                                    e.printStackTrace()
+                                }
                             }
                         )
                     }
@@ -260,7 +287,8 @@ class ScreenshotService : LifecycleService(), SavedStateRegistryOwner, ViewModel
 
 @Composable
 fun FloatingCaptureButton(
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onDrag: (Float, Float) -> Unit
 ) {
     Box(
         modifier = Modifier
@@ -269,7 +297,15 @@ fun FloatingCaptureButton(
                 color = Color(0xFF6200EE),
                 shape = CircleShape
             )
-            .clickable { onClick() },
+            .pointerInput(Unit) {
+                detectDragGestures { change, dragAmount ->
+                    change.consume()
+                    onDrag(dragAmount.x, dragAmount.y)
+                }
+            }
+            .pointerInput(Unit) {
+                detectTapGestures(onTap = { onClick() })
+            },
         contentAlignment = Alignment.Center
     ) {
         Icon(
