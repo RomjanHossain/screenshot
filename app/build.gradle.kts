@@ -47,6 +47,7 @@ dependencies {
     implementation(libs.androidx.core.ktx.v1170)
     implementation(libs.androidx.lifecycle.runtime.ktx.v2100)
     implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.lifecycle.service)
 
     // Compose
     implementation(platform(libs.androidx.compose.bom))
@@ -62,6 +63,7 @@ dependencies {
 
     // Hilt
     implementation(libs.dagger.hilt.android)
+    implementation(libs.androidx.lifecycle.viewmodel.ktx)
     ksp(libs.hilt.compiler)
     implementation(libs.androidx.hilt.navigation.compose)
 
