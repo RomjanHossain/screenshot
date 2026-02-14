@@ -15,6 +15,8 @@ import android.media.projection.MediaProjection
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.os.Handler
+import android.os.Looper
 import android.provider.MediaStore
 import com.capx.ss.domain.model.Screenshot
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -39,8 +41,16 @@ class ScreenshotRepository @Inject constructor(
     private val _screenshots = MutableSharedFlow<Screenshot>(replay = 10)
     val screenshots: Flow<Screenshot> = _screenshots
 
+    private val projectionCallback = object : MediaProjection.Callback() {
+        override fun onStop() {
+            cleanup()
+        }
+    }
+
     fun setMediaProjection(projection: MediaProjection?) {
+        mediaProjection?.unregisterCallback(projectionCallback)
         mediaProjection = projection
+        mediaProjection?.registerCallback(projectionCallback, Handler(Looper.getMainLooper()))
     }
 
     suspend fun loadExistingScreenshots(): List<Screenshot> = withContext(Dispatchers.IO) {
@@ -219,6 +229,7 @@ class ScreenshotRepository @Inject constructor(
 
     fun stopProjection() {
         cleanup()
+        mediaProjection?.unregisterCallback(projectionCallback)
         mediaProjection?.stop()
         mediaProjection = null
     }
