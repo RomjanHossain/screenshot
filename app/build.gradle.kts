@@ -64,12 +64,15 @@ dependencies {
     // Hilt
     implementation(libs.dagger.hilt.android)
     implementation(libs.androidx.lifecycle.viewmodel.ktx)
+    implementation(libs.androidx.media3.effect)
     ksp(libs.hilt.compiler)
     implementation(libs.androidx.hilt.navigation.compose)
 
     // Coroutines
     //noinspection UseTomlInstead
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+    // image preview
+    implementation(libs.coil.compose)
 
     // MediaProjection
     implementation(libs.androidx.media)
