@@ -15,24 +15,9 @@ import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.Toast
-import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CameraAlt
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
-import androidx.compose.ui.unit.dp
 import androidx.core.app.ServiceCompat
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.ViewModelStore
@@ -44,6 +29,7 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.capx.ss.data.repository.ScreenshotRepository
+import com.capx.ss.utils.FloatingCaptureButton
 import dagger.hilt.android.AndroidEntryPoint
 import jakarta.inject.Inject
 import kotlinx.coroutines.CoroutineScope
@@ -153,16 +139,16 @@ class ScreenshotService : LifecycleService(), SavedStateRegistryOwner, ViewModel
             withContext(Dispatchers.Main) {
                 floatingButtonView?.visibility = View.GONE
             }
-            
+
             // Give a tiny delay for the view to disappear from the buffer
             delay(50)
 
             val screenshot = screenshotRepository.captureScreenshot()
-            
+
             withContext(Dispatchers.Main) {
                 // Show FAB again
                 floatingButtonView?.visibility = View.VISIBLE
-                
+
                 if (screenshot != null) {
                     Toast.makeText(
                         this@ScreenshotService,
@@ -183,11 +169,9 @@ class ScreenshotService : LifecycleService(), SavedStateRegistryOwner, ViewModel
     private fun addFloatingButton() {
         if (isFloatingButtonAdded) return
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            if (!Settings.canDrawOverlays(this)) {
-                Toast.makeText(this, "Overlay permission not granted", Toast.LENGTH_SHORT).show()
-                return
-            }
+        if (!Settings.canDrawOverlays(this)) {
+            Toast.makeText(this, "Overlay permission not granted", Toast.LENGTH_SHORT).show()
+            return
         }
 
         try {
@@ -220,9 +204,6 @@ class ScreenshotService : LifecycleService(), SavedStateRegistryOwner, ViewModel
                                 captureScreenshot()
                             },
                             onDrag = { dx, dy ->
-                                // Update layout params based on drag
-                                // Since gravity is BOTTOM | END, increasing x moves it left, 
-                                // and increasing y moves it up.
                                 layoutParams.x -= dx.toInt()
                                 layoutParams.y -= dy.toInt()
                                 try {
@@ -247,9 +228,7 @@ class ScreenshotService : LifecycleService(), SavedStateRegistryOwner, ViewModel
 
             floatingButtonView = frameLayout
             isFloatingButtonAdded = true
-
             Toast.makeText(this, "Floating button added", Toast.LENGTH_SHORT).show()
-
         } catch (e: Exception) {
             e.printStackTrace()
             Toast.makeText(this, "Failed to add button: ${e.message}", Toast.LENGTH_LONG).show()
@@ -285,34 +264,3 @@ class ScreenshotService : LifecycleService(), SavedStateRegistryOwner, ViewModel
     }
 }
 
-@Composable
-fun FloatingCaptureButton(
-    onClick: () -> Unit,
-    onDrag: (Float, Float) -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .size(60.dp)
-            .background(
-                color = Color(0xFF6200EE),
-                shape = CircleShape
-            )
-            .pointerInput(Unit) {
-                detectDragGestures { change, dragAmount ->
-                    change.consume()
-                    onDrag(dragAmount.x, dragAmount.y)
-                }
-            }
-            .pointerInput(Unit) {
-                detectTapGestures(onTap = { onClick() })
-            },
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            imageVector = Icons.Default.CameraAlt,
-            contentDescription = "Capture Screenshot",
-            tint = Color.White,
-            modifier = Modifier.size(30.dp)
-        )
-    }
-}
