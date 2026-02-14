@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
+import com.capx.ss.ui.theme.SsTheme
 
 @Composable
 fun FloatingCaptureButton(
@@ -26,7 +27,7 @@ fun FloatingCaptureButton(
         modifier = Modifier
             .size(60.dp)
             .background(
-                color = MaterialTheme.colorScheme.primary,
+                color = Color(0xFF003258),
                 shape = CircleShape
             )
             .pointerInput(Unit) {
@@ -44,7 +45,19 @@ fun FloatingCaptureButton(
             imageVector = Icons.Default.Camera,
             contentDescription = "Capture Screenshot",
             tint = Color.White,
-            modifier = Modifier.size(30.dp)
+            modifier = Modifier.size(45.dp)
+        )
+    }
+}
+
+@ThemePreviews
+@Composable
+fun Fabpreview(){
+    SsTheme(
+    ) {
+        FloatingCaptureButton(
+            onClick = {},
+            onDrag = {a,b->}
         )
     }
 }
