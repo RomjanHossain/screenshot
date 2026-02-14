@@ -1,14 +1,18 @@
 package com.capx.ss.data.repository
 
 
+import android.app.RecoverableSecurityException
 import android.content.ContentValues
 import android.content.Context
+import android.content.IntentSender
 import android.graphics.Bitmap
+import android.graphics.Bitmap.createBitmap
 import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
 import android.media.ImageReader
 import android.media.projection.MediaProjection
+import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
@@ -37,6 +41,66 @@ class ScreenshotRepository @Inject constructor(
 
     fun setMediaProjection(projection: MediaProjection?) {
         mediaProjection = projection
+    }
+
+    suspend fun loadExistingScreenshots(): List<Screenshot> = withContext(Dispatchers.IO) {
+        val screenshotList = mutableListOf<Screenshot>()
+        val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+        } else {
+            MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+        }
+
+        val projection = arrayOf(
+            MediaStore.Images.Media._ID,
+            MediaStore.Images.Media.DISPLAY_NAME,
+            MediaStore.Images.Media.DATE_ADDED,
+            MediaStore.Images.Media.SIZE,
+            MediaStore.Images.Media.DATA
+        )
+
+        val selection = "${MediaStore.Images.Media.DISPLAY_NAME} LIKE ?"
+        val selectionArgs = arrayOf("Screenshot_%")
+
+        val sortOrder = "${MediaStore.Images.Media.DATE_ADDED} DESC"
+
+        val resolver = context.contentResolver
+
+        resolver.query(
+            collection,
+            projection,
+            selection,
+            selectionArgs,
+            sortOrder
+        )?.use { cursor ->
+            val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Images.Media._ID)
+            val nameColumn = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DISPLAY_NAME)
+            val dateColumn = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATE_ADDED)
+            val sizeColumn = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.SIZE)
+
+            while (cursor.moveToNext()) {
+                val id = cursor.getLong(idColumn)
+                val name = cursor.getString(nameColumn)
+                val dateAdded = cursor.getLong(dateColumn) * 1000 // Convert to milliseconds
+                val size = cursor.getLong(sizeColumn)
+
+                val uri = Uri.withAppendedPath(
+                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                    id.toString()
+                )
+
+                val screenshot = Screenshot(
+                    id = id,
+                    uri = uri,
+                    fileName = name,
+                    timestamp = Date(dateAdded),
+                    fileSize = size
+                )
+                screenshotList.add(screenshot)
+            }
+        }
+
+        return@withContext screenshotList
     }
 
     suspend fun captureScreenshot(): Screenshot? {
@@ -75,13 +139,13 @@ class ScreenshotRepository @Inject constructor(
                     val rowStride = planes[0].rowStride
                     val rowPadding = rowStride - pixelStride * width
 
-                    val bitmap = Bitmap.createBitmap(
+                    val bitmap = createBitmap(
                         width + rowPadding / pixelStride,
                         height,
                         Bitmap.Config.ARGB_8888
                     )
                     bitmap.copyPixelsFromBuffer(buffer)
-                    Bitmap.createBitmap(bitmap, 0, 0, width, height)
+                    createBitmap(bitmap, 0, 0, width, height)
                 }
 
                 image?.close()
@@ -95,6 +159,7 @@ class ScreenshotRepository @Inject constructor(
             }
         }
     }
+
 
     private fun saveBitmapToStorage(bitmap: Bitmap): Screenshot? {
         val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
@@ -126,6 +191,23 @@ class ScreenshotRepository @Inject constructor(
             }
         }
         return null
+    }
+
+    suspend fun deleteScreenshot(screenshot: Screenshot): IntentSender? = withContext(Dispatchers.IO) {
+        val resolver = context.contentResolver
+        try {
+            resolver.delete(screenshot.uri, null, null)
+            null
+        } catch (securityException: SecurityException) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                val pendingIntent = MediaStore.createDeleteRequest(resolver, listOf(screenshot.uri))
+                pendingIntent.intentSender
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && securityException is RecoverableSecurityException) {
+                securityException.userAction.actionIntent.intentSender
+            } else {
+                throw securityException
+            }
+        }
     }
 
     private fun cleanup() {
