@@ -1,6 +1,6 @@
 [versions]
 accompanistPermissions = "0.37.3"
-agp = "9.0.0"
+agp = "9.0.1"
 coilCompose = "3.3.0"
 coreKtx = "1.17.0"
 coreKtxVersion = "1.17.0"
